@@ -1,0 +1,14 @@
+name,email,role,team_name,college
+Alice Nguyen,alice.nguyen@example.edu,participant,Team Quantum,Stanford University
+Rohan Mehta,rohan.mehta@example.edu,participant,Byte Brigade,Indian Institute of Technology Bombay
+Sara Kim,sara.kim@example.edu,participant,NeuroNinjas,Massachusetts Institute of Technology
+Diego Martinez,diego.martinez@example.edu,participant,Event Horizon,University of Texas at Austin
+Lena Fischer,lena.fischer@example.edu,participant,Signal Stack,Technical University of Munich
+Jason Lee,jason.lee@example.edu,participant,Algo Alchemists,National University of Singapore
+Dr. Priya Rao,priya.rao@example.com,mentor,Mentor Collective,Carnegie Mellon University
+Michael Turner,michael.turner@example.com,mentor,Guided Graphs,University of California, Berkeley
+Anita Shah,anita.shah@example.com,mentor,Latency Lab,Georgia Institute of Technology
+Judge Elena Rossi,elena.rossi@example.com,judge,Panel One,Politecnico di Milano
+Judge Omar Haddad,omar.haddad@example.com,judge,Panel Two,King Abdullah University of Science and Technology
+Judge Chloe Bennett,chloe.bennett@example.com,judge,Panel Three,University of Cambridge
+

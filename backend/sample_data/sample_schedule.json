@@ -1,0 +1,45 @@
+[
+  {
+    "name": "Opening Ceremony",
+    "speaker": "Dr. Maya Patel",
+    "start_time": "2026-03-13 09:00",
+    "end_time": "2026-03-13 09:45",
+    "room": "Main Hall"
+  },
+  {
+    "name": "Keynote: Future of Event AI",
+    "speaker": "Dr. Maya Patel",
+    "start_time": "2026-03-13 09:30",
+    "end_time": "2026-03-13 10:15",
+    "room": "Auditorium A"
+  },
+  {
+    "name": "Team Check-in & Badge Pickup",
+    "speaker": "Ops Team",
+    "start_time": "2026-03-13 08:15",
+    "end_time": "2026-03-13 09:15",
+    "room": "Registration Desk"
+  },
+  {
+    "name": "Mentor Office Hours",
+    "speaker": "Mentor Pool",
+    "start_time": "2026-03-13 10:30",
+    "end_time": "2026-03-13 12:00",
+    "room": "Mentor Lounge"
+  },
+  {
+    "name": "Lunch & Networking",
+    "speaker": "Catering Team",
+    "start_time": "2026-03-13 12:00",
+    "end_time": "2026-03-13 13:00",
+    "room": "Dining Hall"
+  },
+  {
+    "name": "Judge Briefing",
+    "speaker": "Head Judge",
+    "start_time": "2026-03-13 09:30",
+    "end_time": "2026-03-13 10:00",
+    "room": "Main Hall"
+  }
+]
+
