@@ -5,7 +5,7 @@ from typing import Any, Dict
 from langgraph.graph import END, START, StateGraph
 
 from agents.content_agent import run_content_agent
-from agents.email_agent import run_email_agent
+
 from agents.scheduler_agent import run_scheduler_agent
 from agents.qa_agent import run_qa_agent
 from state import SwarmState
@@ -110,13 +110,10 @@ def email_node(state: SwarmState) -> SwarmState:
     _append_log(new_state, "email", "running", "Starting email preparation.")
 
     try:
-        # Reuse existing CSV parsing logic from the email endpoint
-        from tools.csv_parser import parse_participants
+        from agents.email_agent import run
 
-        participants_data = parse_participants(new_state["csv_path"])
-
-        result: Dict[str, Any] = run_email_agent(
-            participants_data,
+        result: Dict[str, Any] = run(
+            new_state["csv_path"],
             new_state["email_template"],
         )
         new_state["email_results"] = result
