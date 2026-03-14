@@ -1647,3 +1647,71 @@ p.page-subtitle {
   border-radius: 8px !important;
   font-size: 13px !important;
 }
+
+/* ═══════════════════════════════════════════════════════
+   SWARM WEBSOCKET EVENT LOG
+   ═══════════════════════════════════════════════════════ */
+
+.swarm-event-log {
+  background: rgba(13, 13, 31, 0.6);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px;
+  max-height: 180px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.swarm-event-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-family: monospace;
+  font-size: 12px;
+  padding: 6px 10px;
+  background: rgba(0,0,0,0.3);
+  border-left: 3px solid transparent;
+  border-radius: 4px;
+  animation: slideInRight 0.3s ease forwards;
+}
+
+@keyframes slideInRight {
+  from { opacity: 0; transform: translateX(10px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+.swarm-event-agent {
+  font-weight: bold;
+  color: var(--cyan);
+  min-width: 80px;
+  text-transform: uppercase;
+}
+
+.swarm-event-msg {
+  flex: 1;
+  color: #ccc;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.swarm-event-time {
+  color: var(--text-muted);
+  font-size: 10px;
+}
+
+/* Status variants */
+.swarm-event--running {
+  border-left-color: var(--green);
+  background: linear-gradient(90deg, rgba(0,230,118,0.1), transparent 30%);
+}
+.swarm-event--done {
+  border-left-color: var(--blue);
+  opacity: 0.7;
+}
+.swarm-event--flagged {
+  border-left-color: var(--red);
+  background: linear-gradient(90deg, rgba(255,82,82,0.1), transparent 30%);
+}

@@ -9,6 +9,9 @@ export function EventProvider({ children }) {
   const [isLoaded, setIsLoaded] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [generatedImages, setGeneratedImages] = useState([])
+  
+  const [swarmEvents, setSwarmEvents] = useState([])
+  const [agentStatuses, setAgentStatuses] = useState({})
   const [participants, setParticipants] = useState([])
   const [schedulerState, setSchedulerState] = useState({
     report: null,
@@ -60,6 +63,29 @@ export function EventProvider({ children }) {
     fetchActiveEvent()
   }, [fetchActiveEvent])
 
+  useEffect(() => {
+    const ws = new WebSocket("ws://127.0.0.1:8000/ws/swarm");
+
+    ws.onmessage = (event) => {
+        try {
+            const data = JSON.parse(event.data);
+            setSwarmEvents(prev => [...prev, data]);
+            // Update agent status map
+            setAgentStatuses(prev => ({
+                ...prev,
+                [data.agent]: data.status
+            }));
+        } catch (e) {
+            console.error("WS parse error", e);
+        }
+    };
+
+    ws.onerror = () => console.warn("Swarm WebSocket error");
+    ws.onclose = () => console.log("Swarm WebSocket closed");
+
+    return () => ws.close();
+  }, [])
+
   const value = {
     activeEvent,
     eventName,
@@ -85,6 +111,10 @@ export function EventProvider({ children }) {
     setBudgetState,
     logisticsState,
     setLogisticsState,
+    swarmEvents,
+    setSwarmEvents,
+    agentStatuses,
+    setAgentStatuses,
   }
 
   return <EventContext.Provider value={value}>{children}</EventContext.Provider>

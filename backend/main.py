@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile, Request
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import smtplib
@@ -23,6 +23,25 @@ from agents.scheduler_agent import run_scheduler_agent
 from orchestrator import swarm_app
 from state import SwarmState
 
+class SwarmStreamManager:
+    def __init__(self):
+        self.active: WebSocket | None = None
+
+    async def connect(self, websocket: WebSocket):
+        await websocket.accept()
+        self.active = websocket
+
+    def disconnect(self):
+        self.active = None
+
+    async def push(self, payload: dict):
+        if self.active:
+            try:
+                await self.active.send_text(json.dumps(payload))
+            except Exception:
+                self.active = None
+
+swarm_stream = SwarmStreamManager()
 
 class ContentRequest(BaseModel):
     event_name: str
@@ -62,6 +81,16 @@ app.add_middleware(
 
 from fastapi.staticfiles import StaticFiles
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
+
+
+@app.websocket("/ws/swarm")
+async def websocket_swarm(websocket: WebSocket):
+    await swarm_stream.connect(websocket)
+    try:
+        while True:
+            await websocket.receive_text()  # keep-alive
+    except WebSocketDisconnect:
+        swarm_stream.disconnect()
 
 
 @app.get("/")
@@ -2061,8 +2090,24 @@ RULES:
     email_drafts: List[Dict] = []
     final_response_fields: Dict[str, Any] = {}
 
+    from datetime import datetime, timezone
+    
+    # Push orchestrator is done deciding
+    await swarm_stream.push({
+        "agent": "orchestrator",
+        "status": "done",
+        "message": f"Decided to fire: {', '.join(agents_firing) if agents_firing else 'None'}",
+        "timestamp": datetime.now(timezone.utc).isoformat()
+    })
+
     # Scheduler agent
     if "scheduler_agent" in agents_firing:
+        await swarm_stream.push({
+            "agent": "scheduler",
+            "status": "running",
+            "message": "Analyzing schedule changes...",
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        })
         try:
             sp = decision.get("scheduler_payload", {})
             action = sp.get("action", "")
@@ -2157,11 +2202,30 @@ RULES:
                 results["scheduler"] = {"summary": f"Marked '{target_name}' as cancelled.", "changes": [], "error": None}
             else:
                 results["scheduler"] = {"summary": "Schedule reviewed — no changes needed.", "changes": [], "error": None}
+            
+            await swarm_stream.push({
+                "agent": "scheduler",
+                "status": "done",
+                "message": results["scheduler"]["summary"],
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            })
         except Exception as exc:
             results["scheduler"] = {"summary": "", "changes": [], "error": str(exc)}
+            await swarm_stream.push({
+                "agent": "scheduler",
+                "status": "flagged",
+                "message": str(exc),
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            })
 
     # Content agent
     if "content_agent" in agents_firing:
+        await swarm_stream.push({
+            "agent": "content",
+            "status": "running",
+            "message": "Drafting social media posts...",
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        })
         try:
             cp = decision.get("content_payload", {})
             ctype = cp.get("type", "general")
@@ -2185,11 +2249,30 @@ Write concise, engaging posts for a {ctype} announcement. Return JSON:
             posts = json.loads(raw_posts.strip())
             summary = f"Drafted {', '.join(k for k,v in posts.items() if v)} posts."
             results["content"] = {"summary": summary, "posts": posts, "error": None}
+            
+            await swarm_stream.push({
+                "agent": "content",
+                "status": "done",
+                "message": summary,
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            })
         except Exception as exc:
             results["content"] = {"summary": "", "posts": {}, "error": str(exc)}
+            await swarm_stream.push({
+                "agent": "content",
+                "status": "flagged",
+                "message": str(exc),
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            })
 
     # Email agent
     if "email_agent" in agents_firing:
+        await swarm_stream.push({
+            "agent": "email",
+            "status": "running",
+            "message": "Drafting personalized emails...",
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        })
         try:
             from agents import email_agent
             ep = decision.get("email_payload", {})
@@ -2229,10 +2312,23 @@ Write concise, engaging posts for a {ctype} announcement. Return JSON:
                 "preview": preview,
                 "error": None,
             }
+            
+            await swarm_stream.push({
+                "agent": "email",
+                "status": "done",
+                "message": summary_text,
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            })
         except Exception as exc:
             import traceback as tb
             print("EMAIL ERROR:", tb.format_exc())
             results["email"] = {"summary": "", "preview": [], "error": str(exc)}
+            await swarm_stream.push({
+                "agent": "email",
+                "status": "flagged",
+                "message": str(exc)[:60],
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            })
 
 
     # ── Build display message ────────────────────────────────────────────────

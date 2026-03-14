@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react'
 import { toast } from 'react-hot-toast'
 import { api } from '../shared'
 import ReactMarkdown from 'react-markdown'
+import { useEventConfig } from '../EventContext'
 
 // ── Constants ───────────────────────────────────────────────────────────────
 const STARTERS = [
@@ -44,7 +45,9 @@ export default function SwarmPage() {
   // Read directly from localStorage — EventContext.eventName can be stale
   // if the user saved via the "Load Sample & Save" path without navigating through
   // the normal form submission.
-  const [eventName] = useState(getStoredEventName)
+  const textareaRef = useRef(null)
+  const chatEndRef = useRef(null)
+  const { activeEvent, isLoading, setGeneratedImages, eventName, swarmEvents, setSwarmEvents } = useEventConfig()
 
   const [messages, setMessages]       = useState([])
   const [input, setInput]             = useState('')
@@ -53,8 +56,9 @@ export default function SwarmPage() {
   const [expandedIds, setExpandedIds] = useState({})
   const [isListening, setIsListening] = useState(false)
 
-  const chatEndRef = useRef(null)
-  const textareaRef = useRef(null)
+  // Remove duplicate textareaRef and chatEndRef declarations from here
+  // const chatEndRef = useRef(null)
+  // const textareaRef = useRef(null)
 
   // ── Scroll to bottom whenever messages change ────────────────────────────
   useEffect(() => {
@@ -202,7 +206,15 @@ export default function SwarmPage() {
 
       <div className="chat-outer">
         {/* ── Context bar ── */}
-        <ContextBar eventName={eventName} status={ctxStatus} />
+        <ContextBar 
+          eventName={eventName} 
+          status={ctxStatus} 
+          onClear={() => {
+            setMessages([])
+            setSwarmEvents([])
+          }}
+          hasMessages={messages.length > 0}
+        />
 
         {/* ── Messages ── */}
         <div className="chat-window">
@@ -293,6 +305,27 @@ export default function SwarmPage() {
             </button>
           </div>
         </div>
+
+        {/* ── Live Agent Feed ── */}
+        <div style={{ padding: '0 24px 24px' }}>
+          <div className="swarm-event-log">
+            <h4 style={{ margin: 0, fontSize: '13px', color: 'var(--text-primary)', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span className="material-symbols-outlined" style={{ fontSize: 16, color: 'var(--green)' }}>stream</span>
+              Live Agent Feed
+            </h4>
+            {swarmEvents.length === 0 ? (
+              <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>No recent activity.</div>
+            ) : (
+              swarmEvents.map((e, i) => (
+                <div key={i} className={`swarm-event-item swarm-event--${e.status}`}>
+                  <span className="swarm-event-agent">{e.agent}</span>
+                  <span className="swarm-event-msg">{e.message}</span>
+                  <span className="swarm-event-time">{new Date(e.timestamp).toLocaleTimeString('en-US', { hour12: false })}</span>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
       </div>
     </div>
   )
@@ -300,7 +333,7 @@ export default function SwarmPage() {
 
 // ── Sub-components ──────────────────────────────────────────────────────────
 
-function ContextBar({ eventName, status }) {
+function ContextBar({ eventName, status, onClear, hasMessages }) {
   const loaded = status?.loaded
   return (
     <div className="chat-context-bar">
@@ -317,6 +350,25 @@ function ContextBar({ eventName, status }) {
         <span className="ctx-pill warn" style={{ marginLeft: 'auto' }}>
           ⚠ Go to Event Setup → click "Load Sample & Save" first
         </span>
+      )}
+      {hasMessages && (
+        <button 
+          onClick={onClear}
+          className="btn"
+          style={{ 
+            background: 'transparent', 
+            border: '1px solid var(--border)', 
+            padding: '4px 10px', 
+            fontSize: '11px', 
+            borderRadius: '6px',
+            marginLeft: '12px',
+            color: 'var(--text-muted)'
+          }}
+          title="Clear Chat"
+        >
+          <span className="material-symbols-outlined" style={{ fontSize: 14, verticalAlign: 'middle', marginRight: 4 }}>delete</span>
+          Clear
+        </button>
       )}
     </div>
   )
