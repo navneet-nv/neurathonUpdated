@@ -1,249 +1,404 @@
 import React, { useState, useRef, useEffect } from 'react'
-import { api, StatusBadge } from '../shared'
 import { toast } from 'react-hot-toast'
+import { api } from '../shared'
 
+// ── Constants ───────────────────────────────────────────────────────────────
+const STARTERS = [
+  '⏱ The opening keynote in Hall A is running 30 minutes late',
+  '🚫 The 2pm workshop in Room 2 has been cancelled',
+  '📧 Send a reminder email to all judges for tomorrow\'s sessions',
+  '📣 Draft a sponsor spotlight post for TechCorp',
+  '🌅 Generate the morning brief for Day 2',
+  '📅 Check the schedule for any room conflicts',
+]
+
+const AGENT_META = {
+  scheduler_agent: { icon: '📅', label: 'Scheduler Agent' },
+  content_agent:   { icon: '🎨', label: 'Content Agent' },
+  email_agent:     { icon: '📧', label: 'Email Agent' },
+}
+
+/** Read the stored event name from localStorage — same source SetupPage writes. */
+function getStoredEventName() {
+  try {
+    const saved = localStorage.getItem('swarm_event_config')
+    if (saved) {
+      const cfg = JSON.parse(saved)
+      return cfg.eventName || 'default'
+    }
+  } catch (_) {}
+  return 'default'
+}
+
+function getContextLoaded() {
+  try {
+    const saved = localStorage.getItem('swarm_event_config')
+    if (saved) return JSON.parse(saved).contextLoaded === true
+  } catch (_) {}
+  return false
+}
+
+// ── Main Component ──────────────────────────────────────────────────────────
 export default function SwarmPage() {
-  const [eventName, setEventName] = useState('')
-  const [targetAudience, setTargetAudience] = useState('')
-  const [rawText, setRawText] = useState('')
-  const [eventsText, setEventsText] = useState('[]')
-  const [emailTemplate, setEmailTemplate] = useState('')
-  const [csvPath, setCsvPath] = useState('')
+  // Read directly from localStorage — EventContext.eventName can be stale
+  // if the user saved via the "Load Sample & Save" path without navigating through
+  // the normal form submission.
+  const [eventName] = useState(getStoredEventName)
 
-  const [status, setStatus] = useState('idle')
-  const [activityLog, setActivityLog] = useState([])
-  const [results, setResults] = useState(null)
-  
-  const [showModal, setShowModal] = useState(false)
-  const [hasPrefill, setHasPrefill] = useState(false)
-  const logEndRef = useRef(null)
+  const [messages, setMessages]       = useState([])
+  const [input, setInput]             = useState('')
+  const [thinking, setThinking]       = useState(false)
+  const [ctxStatus, setCtxStatus]     = useState(null)
+  const [expandedIds, setExpandedIds] = useState({})
 
+  const chatEndRef = useRef(null)
+  const textareaRef = useRef(null)
+
+  // ── Scroll to bottom whenever messages change ────────────────────────────
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem('swarm_event_config')
-      if (saved) {
-        const config = JSON.parse(saved)
-        setEventName(config.eventName || '')
-        setTargetAudience(config.targetAudience || '')
-        setRawText(config.description || '')
-        setEventsText(config.scheduleJson || '[]')
-        setEmailTemplate(config.emailTemplate || '')
-        setCsvPath(config.csvPath || '')
-        setHasPrefill(true)
-      }
-    } catch (e) {}
-  }, [])
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [messages, thinking])
 
+  // ── Fetch context status on mount ────────────────────────────────────────
   useEffect(() => {
-    if (logEndRef.current) {
-      logEndRef.current.scrollIntoView({ behavior: 'smooth' })
-    }
-  }, [activityLog])
+    // Use a well-known fixed key so SetupPage and SwarmPage always agree
+    api.get('/api/setup/context/status', { params: { event_name: eventName } })
+      .then(r => setCtxStatus(r.data))
+      .catch(() => {
+        // If backend not yet up, fall back to localStorage flag
+        setCtxStatus({ loaded: getContextLoaded(), events_count: '?', participants_count: '?' })
+      })
+  }, [eventName])
 
-  const handleRunSwarm = async () => {
-    let events
+  // ── Auto-resize textarea ─────────────────────────────────────────────────
+  const handleInputChange = (e) => {
+    setInput(e.target.value)
+    e.target.style.height = 'auto'
+    e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px'
+  }
+
+  // ── Send message ─────────────────────────────────────────────────────────
+  const sendMessage = async (text) => {
+    const msg = text.trim()
+    if (!msg || thinking) return
+
+    const userMsg = { id: Date.now(), role: 'user', text: msg }
+    setMessages(prev => [...prev, userMsg])
+    setInput('')
+    if (textareaRef.current) {
+      textareaRef.current.style.height = '48px'
+    }
+    setThinking(true)
+
+    // Build history for API (last 10 turns)
+    const history = messages.slice(-10).map(m => ({
+      role: m.role === 'user' ? 'user' : 'assistant',
+      content: m.text,
+    }))
+
     try {
-      events = JSON.parse(eventsText || '[]')
-    } catch {
-      return toast.error('Invalid events JSON')
-    }
-
-    if (!eventName || !rawText || !targetAudience) {
-      return toast.error('Fill in event name, audience, and brief')
-    }
-
-    setStatus('running')
-    setActivityLog([])
-    setResults(null)
-
-    try {
-      const payload = {
-        event_name: eventName,
-        raw_text: rawText,
-        target_audience: targetAudience,
-        csv_path: csvPath,
-        email_template: emailTemplate,
-        events,
+      const res = await api.post('/api/swarm/chat', {
+        message: msg,
+        event_name: eventName || 'default',
+        history,
+      })
+      const data = res.data
+      const botMsg = {
+        id: Date.now() + 1,
+        role: 'bot',
+        text: data.display_message || data.understood || 'Done.',
+        data,
       }
-
-      const response = await api.post('/api/swarm/run', payload)
-      const data = response.data || {}
-
-      setActivityLog(data.activity_log || [])
-      setResults(data)
-      setStatus('done')
-      toast.success('Swarm pipeline finished')
-      
-      if (data.email_results?.total_processed > 0 || Object.keys(data.email_results || {}).length > 0) {
-        setShowModal(true)
-      }
+      setMessages(prev => [...prev, botMsg])
     } catch (err) {
-      console.error(err)
-      setStatus('error')
-      toast.error('Failed to run swarm orchestrator')
+      const errMsg = err?.response?.data?.detail || err.message || 'Unknown error'
+      setMessages(prev => [...prev, {
+        id: Date.now() + 1,
+        role: 'bot',
+        text: `❌ Error: ${errMsg}`,
+        data: null,
+      }])
+    } finally {
+      setThinking(false)
     }
   }
 
-  const handleApprove = () => {
-    setShowModal(false)
-    toast.success('Emails dispatched!')
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      sendMessage(input)
+    }
   }
 
+  // ── Approve email send ───────────────────────────────────────────────────
+  const handleApprove = async (msgId, emailDrafts) => {
+    toast.loading('Sending emails…', { id: 'send' })
+    try {
+      const res = await api.post('/api/swarm/approve', { email_drafts: emailDrafts })
+      toast.success(`✅ Sent ${res.data.sent} emails`, { id: 'send' })
+      // update the message to reflect sent state
+      setMessages(prev => prev.map(m =>
+        m.id === msgId
+          ? { ...m, approved: true, approveResult: res.data }
+          : m
+      ))
+    } catch (err) {
+      toast.error('Send failed — check GMAIL env vars', { id: 'send' })
+    }
+  }
+
+  const toggleExpand = (id) => {
+    setExpandedIds(prev => ({ ...prev, [id]: !prev[id] }))
+  }
+
+  // ── Render ───────────────────────────────────────────────────────────────
   return (
     <div>
-      <div className="page-header-card" style={{ marginBottom: '16px' }}>
+      {/* Page header */}
+      <div className="page-header-card">
         <div>
-          <h2 className="page-header" style={{ background: 'linear-gradient(135deg, var(--blue), var(--purple))', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-            Swarm Orchestrator
-          </h2>
-          <p className="page-subtitle" style={{ margin: 0 }}>Run the full LangGraph logistics pipeline.</p>
-        </div>
-        <StatusBadge status={status} />
-      </div>
-
-      <div className="pipeline-flow">
-        <div className="flow-node active">
-          <span className="material-symbols-outlined">note_stack</span>
-          Content
-        </div>
-        <div className="flow-arrow">
-          <span className="material-symbols-outlined">arrow_forward</span>
-        </div>
-        <div className="flow-node active">
-          <span className="material-symbols-outlined">deployed_code</span>
-          Scheduler
-        </div>
-        <div className="flow-arrow">
-          <span className="flow-arrow-label">if conflict</span>
-          <span className="material-symbols-outlined">arrow_forward</span>
-        </div>
-        <div className="flow-node active">
-          <span className="material-symbols-outlined">mail</span>
-          Email
+          <h2 className="page-header">💬 Swarm Orchestrator</h2>
+          <p className="page-subtitle" style={{ margin: 0 }}>
+            Natural language → all 3 agents fire automatically
+          </p>
         </div>
       </div>
 
-      {hasPrefill && <div className="prefill-banner">✓ Pre-filled from your Event Setup — edit if needed</div>}
+      <div className="chat-outer">
+        {/* ── Context bar ── */}
+        <ContextBar eventName={eventName} status={ctxStatus} />
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) minmax(0,1.2fr)', gap: '32px' }}>
-        
-        {/* Left Col: Setup */}
-        <div className="agent-card">
-          <h3 className="section-title">Context Injection</h3>
-          
-          <div className="form-row">
-            <div className="form-group">
-              <label className="form-label">Event Name</label>
-              <input className="form-input" value={eventName} onChange={e => setEventName(e.target.value)} />
+        {/* ── Messages ── */}
+        <div className="chat-window">
+          {messages.length === 0 && !thinking ? (
+            <EmptyState onSelect={t => sendMessage(t)} />
+          ) : (
+            messages.map(msg =>
+              msg.role === 'user'
+                ? <UserBubble key={msg.id} text={msg.text} />
+                : <BotBubble
+                    key={msg.id}
+                    msg={msg}
+                    expanded={expandedIds[msg.id]}
+                    onToggleExpand={() => toggleExpand(msg.id)}
+                    onApprove={(drafts) => handleApprove(msg.id, drafts)}
+                  />
+            )
+          )}
+
+          {/* Typing indicator */}
+          {thinking && (
+            <div className="chat-bubble-wrap">
+              <div className="chat-avatar">🤖</div>
+              <div className="chat-bubble bot" style={{ padding: '14px 18px' }}>
+                <div className="typing-dots">
+                  <span /><span /><span />
+                </div>
+              </div>
             </div>
-            <div className="form-group">
-              <label className="form-label">Target Audience</label>
-              <input className="form-input" value={targetAudience} onChange={e => setTargetAudience(e.target.value)} />
-            </div>
-          </div>
+          )}
+          <div ref={chatEndRef} />
+        </div>
 
-          <div className="form-group">
-            <label className="form-label">Event Description / Brief</label>
-            <textarea className="form-textarea" value={rawText} onChange={e => setRawText(e.target.value)} />
-          </div>
-
-          <div className="form-row">
-            <div className="form-group">
-              <label className="form-label">Events (JSON)</label>
-              <textarea className="form-textarea" style={{ fontFamily: 'monospace', fontSize: '11px' }} value={eventsText} onChange={e => setEventsText(e.target.value)} />
-            </div>
-            <div className="form-group">
-              <label className="form-label">Email Template</label>
-              <textarea className="form-textarea" value={emailTemplate} onChange={e => setEmailTemplate(e.target.value)} />
-            </div>
-          </div>
-
-          <div className="form-group">
-            <label className="form-label">CSV Path (Participants)</label>
-            <input className="form-input" value={csvPath} onChange={e => setCsvPath(e.target.value)} placeholder="backend/uploads/participants.csv" />
-          </div>
-
-          <button 
-            className="btn-swarm" 
-            onClick={handleRunSwarm}
-            disabled={status === 'running'}
+        {/* ── Input bar ── */}
+        <div className="chat-input-bar">
+          <textarea
+            ref={textareaRef}
+            value={input}
+            onChange={handleInputChange}
+            onKeyDown={handleKeyDown}
+            placeholder={
+              ctxStatus?.loaded
+                ? 'Type a command… (Enter to send, Shift+Enter for newline)'
+                : 'Go to Event Setup and load your schedule first…'
+            }
+            disabled={thinking}
+            rows={1}
+          />
+          <button
+            className="chat-send-btn"
+            onClick={() => sendMessage(input)}
+            disabled={!input.trim() || thinking}
+            title="Send"
           >
-            <span className="material-symbols-outlined">rocket_launch</span>
-            {status === 'running' ? 'Igniting Swarm...' : 'Run Full Swarm'}
+            ↑
           </button>
         </div>
-
-        {/* Right Col: Timeline & Outputs */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-          <div className="agent-card" style={{ flexGrow: 1 }}>
-            <h3 className="section-title">Activity Feed</h3>
-            {activityLog.length === 0 ? (
-               <div style={{ display: 'flex', flexGrow: 1, alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)' }}>
-                 Awaiting orchestration...
-               </div>
-            ) : (
-                <div style={{ maxHeight: '380px', overflowY: 'auto' }} className="output-terminal">
-                  {activityLog.map((log, i) => (
-                    <div key={i} style={{ marginBottom: '16px', display: 'flex', gap: '12px' }}>
-                       <span style={{ color: 'var(--text-muted)', width: '60px' }}>{log.timestamp?.split(' ')[1] || '00:00'}</span>
-                       <div>
-                         <div style={{ color: 'var(--blue)', fontWeight: '600' }}>[{log.agent}] {log.status}</div>
-                         <div style={{ color: 'var(--text-primary)' }}>{log.summary}</div>
-                       </div>
-                    </div>
-                  ))}
-                  <div ref={logEndRef} />
-                </div>
-            )}
-          </div>
-
-          {results && (
-            <>
-               {typeof results.conflicts_found !== 'undefined' && (
-                 <div className={`banner-conflict ${results.conflicts_found ? 'error' : 'success'}`} style={{ margin: 0 }}>
-                   <span className="material-symbols-outlined">{results.conflicts_found ? 'warning' : 'check_circle'}</span>
-                   {results.conflicts_found ? 'Scheduler detected and resolved conflicts.' : 'No schedule conflicts found.'}
-                 </div>
-               )}
-
-               <div className="agent-card">
-                  <h3 className="section-title">Generated Posts</h3>
-                  <div className="output-terminal" style={{ margin: 0, maxHeight: '200px' }}>
-                     {Object.keys(results.generated_posts || {}).length > 0 
-                        ? JSON.stringify(results.generated_posts, null, 2)
-                        : <span style={{ color: 'var(--text-muted)' }}>No social content generated.</span>
-                     }
-                  </div>
-               </div>
-
-               <div className="agent-card">
-                  <h3 className="section-title">Email Results</h3>
-                  <div className="output-terminal" style={{ margin: 0, maxHeight: '200px' }}>
-                     {Object.keys(results.email_results || {}).length > 0 
-                        ? JSON.stringify(results.email_results, null, 2)
-                        : <span style={{ color: 'var(--text-muted)' }}>No emails generated.</span>
-                     }
-                  </div>
-               </div>
-            </>
-          )}
-        </div>
       </div>
+    </div>
+  )
+}
 
-      {showModal && (
-        <div className="modal-overlay">
-          <div className="modal-card">
-            <h2 style={{ fontSize: '20px', fontWeight: '600', marginBottom: '16px' }}>Approve Dispatch</h2>
-            <p style={{ color: 'var(--text-secondary)', fontSize: '14px', lineHeight: '1.5', paddingBottom: '24px', borderBottom: '1px solid var(--border)' }}>
-              Authorize sending of <span style={{ color: 'white' }}>{results?.email_results?.total_processed || 0}</span> templated emails?
-            </p>
-            <div className="modal-actions">
-              <button className="btn-primary" style={{ background: 'var(--bg-input)' }} onClick={() => setShowModal(false)}>Cancel</button>
-              <button className="btn-primary" onClick={handleApprove}>Approve & Send</button>
-            </div>
-          </div>
-        </div>
+// ── Sub-components ──────────────────────────────────────────────────────────
+
+function ContextBar({ eventName, status }) {
+  const loaded = status?.loaded
+  return (
+    <div className="chat-context-bar">
+      <span style={{ fontWeight: 700, color: 'var(--text-primary)', marginRight: 4 }}>
+        {eventName || 'No event configured'}
+      </span>
+      {loaded ? (
+        <>
+          <span className="ctx-pill ready">✓ {status.events_count} events</span>
+          <span className="ctx-pill ready">✓ {status.participants_count} participants</span>
+          <span className="ctx-pill ready" style={{ marginLeft: 'auto' }}>Context Ready</span>
+        </>
+      ) : (
+        <span className="ctx-pill warn" style={{ marginLeft: 'auto' }}>
+          ⚠ Go to Event Setup → click "Load Sample & Save" first
+        </span>
       )}
     </div>
   )
+}
+
+function EmptyState({ onSelect }) {
+  return (
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+      <div style={{ fontSize: 48, marginBottom: 8 }}>🤖</div>
+      <h3 style={{ fontWeight: 700, fontSize: 18, color: 'var(--text-primary)' }}>
+        Swarm Orchestrator
+      </h3>
+      <p style={{ fontSize: 13, color: 'var(--text-muted)', textAlign: 'center', maxWidth: 420 }}>
+        I have full context of your event — schedule, participants, sponsors.
+        Type a command and I'll decide which agents to fire.
+      </p>
+      <div className="starter-suggestions">
+        {STARTERS.map(s => (
+          <button key={s} className="starter-chip" onClick={() => onSelect(s)}>
+            {s}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function UserBubble({ text }) {
+  return (
+    <div className="chat-bubble-wrap user">
+      <div className="chat-avatar">👤</div>
+      <div className="chat-bubble user">{text}</div>
+    </div>
+  )
+}
+
+function BotBubble({ msg, expanded, onToggleExpand, onApprove }) {
+  const { data, text, approved, approveResult } = msg
+  const agentsFired = data?.agents_fired || []
+  const results = data?.results || {}
+  const emailDrafts = data?.email_drafts || []
+  const needsApproval = data?.needs_approval && !approved
+  const understood = data?.understood
+
+  // Build expandable details
+  const hasDetails = agentsFired.length > 0 && Object.keys(results).length > 0
+
+  const detailText = buildDetailText(results, data)
+
+  return (
+    <div className="chat-bubble-wrap">
+      <div className="chat-avatar">🤖</div>
+      <div className="chat-bubble bot">
+
+        {/* Understood line */}
+        {understood && (
+          <div className="chat-understood">🎯 {understood}</div>
+        )}
+
+        {/* Display message */}
+        <div style={{ fontSize: 14, color: 'var(--text-primary)', lineHeight: '1.6' }}>
+          {text}
+        </div>
+
+        {/* Agent activity cards */}
+        {agentsFired.map(agentKey => {
+          const meta = AGENT_META[agentKey] || { icon: '🔧', label: agentKey }
+          const r = results[agentKey === 'scheduler_agent' ? 'scheduler'
+                          : agentKey === 'content_agent'   ? 'content'
+                          : 'email'] || {}
+          const hasError = !!r.error
+          return (
+            <div className="agent-activity-card" key={agentKey}>
+              <span className="agent-icon">{meta.icon}</span>
+              <div className="agent-info">
+                <div className="agent-name">{meta.label}</div>
+                <div className="agent-summary">
+                  {hasError ? `⚠ ${r.error}` : (r.summary || 'Completed.')}
+                </div>
+              </div>
+              <span className={hasError ? 'agent-status-err' : 'agent-status-ok'}>
+                {hasError ? '✗' : '✓'}
+              </span>
+            </div>
+          )
+        })}
+
+        {/* Email approval bar */}
+        {needsApproval && emailDrafts.length > 0 && (
+          <div className="chat-approve-bar">
+            <p>
+              {data.approval_message || `Ready to send ${emailDrafts.length} emails.`}
+              {' '}<strong>Preview:</strong>{' '}
+              {emailDrafts.slice(0, 2).map(d => d.name).join(', ')}
+              {emailDrafts.length > 2 ? ` + ${emailDrafts.length - 2} more` : ''}
+            </p>
+            <button className="btn btn-approve" onClick={() => onApprove(emailDrafts)}>
+              ✓ Send
+            </button>
+            <button className="btn btn-cancel" style={{ fontSize: 12, padding: '6px 10px' }}
+              onClick={() => toast('Cancelled — emails not sent.')}>
+              ✗
+            </button>
+          </div>
+        )}
+
+        {/* Approved confirmation */}
+        {approved && (
+          <div style={{
+            padding: '8px 12px', background: 'rgba(0,230,118,0.08)',
+            border: '1px solid rgba(0,230,118,0.2)', borderRadius: 8,
+            fontSize: 12, color: 'var(--green)'
+          }}>
+            ✅ Emails sent — {approveResult?.sent ?? 0} delivered
+            {approveResult?.failed?.length > 0 && `, ${approveResult.failed.length} failed`}
+          </div>
+        )}
+
+        {/* Expandable full output */}
+        {hasDetails && (
+          <>
+            <button className="chat-expand-btn" onClick={onToggleExpand}>
+              {expanded ? '▲ Hide details' : '▼ See full outputs'}
+            </button>
+            {expanded && (
+              <div className="chat-expanded-content">{detailText}</div>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function buildDetailText(results, data) {
+  const lines = []
+  if (results.content?.posts) {
+    const p = results.content.posts
+    if (p.twitter)   lines.push('── Twitter ──\n' + p.twitter)
+    if (p.linkedin)  lines.push('── LinkedIn ──\n' + p.linkedin)
+    if (p.instagram) lines.push('── Instagram ──\n' + p.instagram)
+    if (p.announcement) lines.push('── Announcement ──\n' + p.announcement)
+  }
+  if (results.scheduler?.changes?.length) {
+    lines.push('── Schedule Changes ──\n' + results.scheduler.changes.join('\n'))
+  }
+  if (results.email?.preview?.length) {
+    lines.push('── Email Previews ──')
+    results.email.preview.forEach(e => {
+      lines.push(`To: ${e.name} <${e.email}>\nSubject: ${e.subject}\n${e.body}\n`)
+    })
+  }
+  return lines.join('\n\n') || 'No extra details.'
 }

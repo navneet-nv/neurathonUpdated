@@ -1,55 +1,189 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { api } from '../shared'
 import { toast } from 'react-hot-toast'
+import { useEventConfig } from '../EventContext'
 
+// ── Role badge color map ──────────────────────────────────────────────────────
+const ROLE_BADGE = {
+  participant: 'badge-running',
+  mentor:      'badge-done',
+  judge:       'badge-error',
+  speaker:     'badge-idle',
+  volunteer:   'badge-idle',
+}
+
+// ── ParticipantTable ──────────────────────────────────────────────────────────
+function ParticipantTable({ participants, setParticipants }) {
+  const [editingIdx, setEditingIdx] = useState(null)
+  const [draft, setDraft] = useState({})
+  const set = (k, v) => setDraft(p => ({ ...p, [k]: v }))
+
+  const saveEdit = () => {
+    setParticipants(prev => prev.map((p, i) => i === editingIdx ? draft : p))
+    setEditingIdx(null)
+    toast.success('Participant updated locally (Save not implemented for demo)')
+  }
+  const deleteRow = (idx) => {
+    if (!window.confirm('Remove this participant?')) return
+    setParticipants(prev => prev.filter((_, i) => i !== idx))
+  }
+
+  if (!participants.length) return <div className="empty-state">No participants loaded yet.</div>
+
+  return (
+    <div style={{ overflowX: 'auto' }}>
+      <table className="data-table">
+        <thead>
+          <tr>
+            <th>Name</th><th>Email</th><th>Role</th><th>Team</th><th>College</th><th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {participants.map((p, idx) => (
+            <tr key={idx}>
+              {editingIdx === idx ? (
+                <>
+                  <td><input className="form-input" style={{ padding: '4px 8px', fontSize: '12px' }} value={draft.name || ''} onChange={e => set('name', e.target.value)} /></td>
+                  <td><input className="form-input" style={{ padding: '4px 8px', fontSize: '12px' }} value={draft.email || ''} onChange={e => set('email', e.target.value)} /></td>
+                  <td>
+                    <select className="form-input" style={{ padding: '4px 8px', fontSize: '12px' }} value={draft.role || ''} onChange={e => set('role', e.target.value)}>
+                      <option value="participant">participant</option>
+                      <option value="mentor">mentor</option>
+                      <option value="judge">judge</option>
+                      <option value="speaker">speaker</option>
+                      <option value="volunteer">volunteer</option>
+                    </select>
+                  </td>
+                  <td><input className="form-input" style={{ padding: '4px 8px', fontSize: '12px' }} value={draft.team_name || ''} onChange={e => set('team_name', e.target.value)} /></td>
+                  <td><input className="form-input" style={{ padding: '4px 8px', fontSize: '12px' }} value={draft.college || ''} onChange={e => set('college', e.target.value)} /></td>
+                  <td>
+                    <div className="data-row-actions">
+                      <button className="btn-sm" onClick={() => setEditingIdx(null)}>✕</button>
+                      <button className="btn-sm save" onClick={saveEdit}>✓</button>
+                    </div>
+                  </td>
+                </>
+              ) : (
+                <>
+                  <td style={{ fontWeight: 600 }}>{p.name}</td>
+                  <td style={{ color: 'var(--text-muted)', fontSize: '12px' }}>{p.email}</td>
+                  <td><span className={`badge ${ROLE_BADGE[p.role] || 'badge-idle'}`}>{p.role}</span></td>
+                  <td>{p.team_name}</td>
+                  <td style={{ color: 'var(--text-muted)', fontSize: '12px' }}>{p.college}</td>
+                  <td>
+                    <div className="data-row-actions">
+                      <button className="btn-sm edit" onClick={() => { setEditingIdx(idx); setDraft({ ...p }) }}>Edit</button>
+                      <button className="btn-sm delete" onClick={() => deleteRow(idx)}>Del</button>
+                    </div>
+                  </td>
+                </>
+              )}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+// ── AddParticipantForm ────────────────────────────────────────────────────────
+function AddParticipantForm({ onAdd, onClose }) {
+  const [form, setForm] = useState({ name: '', email: '', role: 'participant', team_name: '', college: '' })
+  const set = (k, v) => setForm(p => ({ ...p, [k]: v }))
+  const submit = () => {
+    if (!form.name || !form.email) return toast.error('Name and email are required')
+    onAdd(form)
+    onClose()
+  }
+  return (
+    <div className="inline-edit-form" style={{ marginBottom: '12px' }}>
+      <p style={{ fontWeight: 700, fontSize: '13px', color: 'var(--blue)' }}>+ Add Participant</p>
+      <div className="form-row-inline">
+        <div className="form-group"><label className="form-label">Name *</label><input className="form-input" value={form.name} onChange={e => set('name', e.target.value)} /></div>
+        <div className="form-group"><label className="form-label">Email *</label><input className="form-input" value={form.email} onChange={e => set('email', e.target.value)} /></div>
+        <div className="form-group">
+          <label className="form-label">Role</label>
+          <select className="form-input" value={form.role} onChange={e => set('role', e.target.value)}>
+            <option>participant</option><option>mentor</option><option>judge</option><option>speaker</option><option>volunteer</option>
+          </select>
+        </div>
+        <div className="form-group"><label className="form-label">Team</label><input className="form-input" value={form.team_name} onChange={e => set('team_name', e.target.value)} /></div>
+        <div className="form-group"><label className="form-label">College</label><input className="form-input" value={form.college} onChange={e => set('college', e.target.value)} /></div>
+      </div>
+      <div className="inline-edit-actions">
+        <button className="btn-sm" onClick={onClose}>Cancel</button>
+        <button className="btn-sm save" onClick={submit}>Add</button>
+      </div>
+    </div>
+  )
+}
+
+// ── Main Page ─────────────────────────────────────────────────────────────────
 export default function EmailPage() {
-  const [file, setFile] = useState(null)
-  const [template, setTemplate] = useState("Hi {name},\n\nWe're excited to have you at Neurathon '26 as a {role}. Your team {team_name} has been registered.\n\nLooking forward to seeing you!\n\nBest regards,\nThe Organizing Team")
-  const [loading, setLoading] = useState(false)
+  const { activeEvent, eventName } = useEventConfig()
+  const [participants, setParticipants] = useState([])
+  
+  const [showAddForm, setShowAddForm] = useState(false)
+  const [template, setTemplate] = useState(
+    "Hi {name},\n\nWe're excited to have you at Neurathon '26 as a {role}. Your team {team_name} has been registered.\n\nLooking forward to seeing you!\n\nBest regards,\nThe Organizing Team"
+  )
+  const [genLoading, setGenLoading] = useState(false)
   const [result, setResult] = useState(null)
   const [showModal, setShowModal] = useState(false)
   const [approved, setApproved] = useState(false)
   const [sending, setSending] = useState(false)
 
-  const handleApproveAndSend = async () => {
-    setSending(true)
+  useEffect(() => {
+    if (activeEvent) {
+      if (activeEvent.participants?.length > 0) {
+        setParticipants(activeEvent.participants)
+      } else {
+        setParticipants([])
+      }
+      if (activeEvent.email_template) {
+        setTemplate(activeEvent.email_template)
+      }
+    }
+  }, [activeEvent])
+
+  // ── Generate emails ───────────────────────────────────────────────────────
+  const handleGenerate = async () => {
+    if (participants.length === 0) return toast.error('No participants available. Add them in Event Settings first.')
+    if (!template.trim()) return toast.error('Enter an email template')
+    setGenLoading(true)
+    setResult(null)
     try {
-      const response = await api.post("/api/email/send", {
-        preview: result.preview
-      })
-      setApproved(true)
-      setShowModal(false)
-      toast.success(`✅ ${response.data.sent} emails sent successfully via Gmail!`)
+      // Write participants to a temp CSV blob and send to /api/email
+      const headers = 'name,email,role,team_name,college'
+      const rows = participants.map(p =>
+        [p.name, p.email, p.role, p.team_name || '', p.college || ''].join(',')
+      )
+      const csvText = [headers, ...rows].join('\n')
+      const blob = new Blob([csvText], { type: 'text/csv' })
+      const formData = new FormData()
+      formData.append('file', blob, 'participants.csv')
+      formData.append('template', template)
+      const res = await api.post('/api/email', formData, { headers: { 'Content-Type': 'multipart/form-data' } })
+      setResult(res.data)
+      toast.success('Emails generated!')
     } catch (err) {
-      toast.error("Failed to send emails. Check backend terminal for details.")
+      toast.error('Generation failed — check backend')
     } finally {
-      setSending(false)
+      setGenLoading(false)
     }
   }
 
-  const handleGenerate = async () => {
-    if (!file) return toast.error("Please upload a CSV file")
-    if (!template.trim()) return toast.error("Please enter an email template")
-
-    setLoading(true)
-    setResult(null)
-
+  const handleApproveAndSend = async () => {
+    setSending(true)
     try {
-      const formData = new FormData()
-      formData.append('file', file)
-      formData.append('template', template)
-
-      const response = await api.post('/api/email', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      })
-
-      setResult(response.data)
-      toast.success("Emails generated successfully!")
-    } catch (err) {
-      console.error(err)
-      toast.error("Email generation failed. Check your backend terminal.")
+      const res = await api.post('/api/email/send', { preview: result.preview })
+      setApproved(true)
+      setShowModal(false)
+      toast.success(`✅ ${res.data.sent} emails sent via Gmail!`)
+    } catch {
+      toast.error('Send failed — check Gmail credentials in .env')
     } finally {
-      setLoading(false)
+      setSending(false)
     }
   }
 
@@ -57,130 +191,100 @@ export default function EmailPage() {
     <div className="page-body">
       <div className="page-header-card">
         <h1>Email Agent</h1>
-        <p>CSV-powered personalized email generation with human approval</p>
+        <p>GPT-4o personalizes emails per role · Human approval required before send</p>
+        {eventName && <div style={{ marginTop: '12px', display: 'inline-block', background: 'rgba(74,144,255,0.1)', color: 'var(--blue)', padding: '4px 12px', borderRadius: '4px', fontSize: '13px', fontWeight: '600' }}>Active Data Source: {eventName}</div>}
       </div>
 
-      <div style={{ display: "flex", gap: "1.5rem", alignItems: "flex-start" }}>
-
-        {/* LEFT */}
+      <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'flex-start' }}>
+        {/* LEFT — Participant list */}
         <div className="agent-card" style={{ flex: 1 }}>
-          <h3>Configuration</h3>
-
-          <div className="form-group">
-            <label className="form-label">Participant CSV</label>
-            <div className="file-drop-zone">
-              <input
-                type="file"
-                accept=".csv,.xlsx"
-                onChange={(e) => setFile(e.target.files?.[0] || null)}
-              />
-              <p>{file ? file.name : "Drop your CSV here or click to browse"}</p>
-            </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+            <h3>Participant List {participants.length > 0 ? `(${participants.length})` : ''}</h3>
           </div>
 
-          <div className="form-group">
+          {participants.length === 0 ? (
+            <div className="empty-state">No participants found. Edit {eventName} in Event Settings to assign participants.</div>
+          ) : (
+            <>
+              {showAddForm && <AddParticipantForm onAdd={p => setParticipants(prev => [...prev, p])} onClose={() => setShowAddForm(false)} />}
+              <ParticipantTable participants={participants} setParticipants={setParticipants} />
+              {!showAddForm && <button className="add-row-btn" onClick={() => setShowAddForm(true)}>+ Add Participant</button>}
+            </>
+          )}
+
+          {/* Template */}
+          <div className="form-group" style={{ marginTop: '20px' }}>
             <label className="form-label">Email Template</label>
-            <p style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>Use {'{name}'}, {'{role}'}, {'{team_name}'} as placeholders</p>
-            <textarea
-              className="form-textarea"
-              rows={8}
-              value={template}
-              onChange={(e) => setTemplate(e.target.value)}
-            />
+            <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '6px' }}>Use {'{'+'name}'}, {'{'+'role}'}, {'{'+'team_name}'} as placeholders</p>
+            <textarea className="form-textarea" rows={7} value={template} onChange={e => setTemplate(e.target.value)} />
           </div>
 
-          <button
-            className="btn btn-primary"
-            onClick={handleGenerate}
-            disabled={loading}
-          >
-            {loading ? "Generating..." : "Generate Emails"}
+          <button className="btn btn-primary" style={{ width: '100%' }} onClick={handleGenerate} disabled={genLoading || participants.length === 0}>
+            {genLoading ? '⏳ Generating personalized emails...' : `✉️ Generate Emails (${participants.length})`}
           </button>
         </div>
 
-        {/* RIGHT */}
-        <div className="agent-card" style={{ flex: 1.5 }}>
-          <h3>Preview</h3>
-
-          {loading ? (
-            <div className="spinner"></div>
+        {/* RIGHT — Preview */}
+        <div className="agent-card" style={{ flex: 1.4 }}>
+          <h3>Email Preview</h3>
+          {genLoading ? (
+            <div className="spinner" style={{ margin: '40px auto' }} />
           ) : !result ? (
-            <div className="empty-state">Upload a CSV and click Generate to preview personalized emails</div>
+            <div className="empty-state">Load participants and click Generate to preview personalized emails</div>
           ) : (
             <>
-              <div style={{ display: "flex", gap: "1rem", marginBottom: "1rem" }}>
-                <div className="metric-card">
-                  <div className="metric-value">{result.total_recipients}</div>
-                  <div className="metric-label">Total Recipients</div>
-                </div>
-                <div className="metric-card">
-                  <div className="metric-value">{result.segments?.participants || 0}</div>
-                  <div className="metric-label">Participants</div>
-                </div>
-                <div className="metric-card">
-                  <div className="metric-value">{result.segments?.mentors || 0}</div>
-                  <div className="metric-label">Mentors</div>
-                </div>
-                <div className="metric-card">
-                  <div className="metric-value">{result.segments?.judges || 0}</div>
-                  <div className="metric-label">Judges</div>
-                </div>
+              <div style={{ display: 'flex', gap: '1rem', marginBottom: '1rem' }}>
+                <div className="metric-card"><div className="metric-value">{result.total_recipients}</div><div className="metric-label">Recipients</div></div>
+                <div className="metric-card"><div className="metric-value">{result.segments?.participants || 0}</div><div className="metric-label">Participants</div></div>
+                <div className="metric-card"><div className="metric-value">{result.segments?.mentors || 0}</div><div className="metric-label">Mentors</div></div>
+                <div className="metric-card"><div className="metric-value">{result.segments?.judges || 0}</div><div className="metric-label">Judges</div></div>
               </div>
 
-              <p className="output-label">Email Previews</p>
-              <div className="output-terminal" style={{ maxHeight: "320px", overflowY: "auto" }}>
+              <p className="output-label" style={{ marginBottom: '8px' }}>Email Previews</p>
+              <div style={{ maxHeight: '380px', overflowY: 'auto' }}>
                 {result.preview?.map((person, idx) => (
-                  <div key={idx} style={{ borderBottom: "1px solid var(--border)", paddingBottom: "0.75rem", marginBottom: "0.75rem" }}>
-                    <p style={{ fontWeight: 'bold' }}>{person.name} · {person.role}</p>
-                    <p style={{ color: "var(--text-muted)", fontSize: "0.8rem" }}>{person.email}</p>
-                    <p style={{ color: "var(--text-secondary)", fontSize: "0.85rem" }}>{person.body.slice(0, 120)}...</p>
+                  <div key={idx} style={{ background: 'var(--bg-input)', borderRadius: '10px', padding: '12px', marginBottom: '8px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                      <p style={{ fontWeight: 700 }}>{person.name}</p>
+                      <span className={`badge ${ROLE_BADGE[person.role] || 'badge-idle'}`}>{person.role}</span>
+                    </div>
+                    <p style={{ color: 'var(--text-muted)', fontSize: '12px', marginBottom: '6px' }}>{person.email}</p>
+                    <p style={{ color: 'var(--text-secondary)', fontSize: '13px', lineHeight: 1.6 }}>{person.body?.slice(0, 150)}...</p>
                   </div>
                 ))}
               </div>
 
               {!approved ? (
-                <button
-                  className="btn btn-approve"
-                  onClick={() => setShowModal(true)}
-                  style={{ marginTop: '16px' }}
-                >
+                <button className="btn btn-approve" style={{ width: '100%', marginTop: '16px' }} onClick={() => setShowModal(true)}>
                   ✅ Approve & Send ({result.total_recipients} emails)
                 </button>
               ) : (
-                <div className="banner-conflict success" style={{ marginTop: '16px' }}>
-                  ✅ Emails dispatched! Check the recipients' inboxes.
-                </div>
+                <div className="banner-conflict success" style={{ marginTop: '16px' }}>✅ Emails dispatched! Check inboxes.</div>
               )}
             </>
           )}
         </div>
       </div>
 
-      {/* MODAL */}
+      {/* ══ Approval Modal ══ */}
       {showModal && result && (
         <div className="modal-overlay">
           <div className="modal-card">
             <h2>Confirm Email Dispatch</h2>
-            <p style={{ marginBottom: '16px', color: 'var(--text-secondary)' }}>You are about to send to {result.total_recipients} recipients. Preview of first 3 emails:</p>
-
-            <div style={{ marginBottom: '24px' }}>
-              {result.preview?.slice(0, 3).map((person, idx) => (
-                <div key={idx} style={{ background: "var(--bg-input)", borderRadius: "8px", padding: "0.75rem", marginBottom: "0.5rem" }}>
-                  <p style={{ fontWeight: 'bold' }}>{person.name} — {person.role}</p>
-                  <p style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>{person.email}</p>
-                  <p style={{ fontSize: "0.85rem", marginTop: "0.5rem" }}>{person.body.slice(0, 80)}...</p>
-                </div>
-              ))}
-            </div>
-
+            <p style={{ color: 'var(--text-secondary)', marginBottom: '16px' }}>
+              Sending to <strong>{result.total_recipients}</strong> recipients. Preview of first 3:
+            </p>
+            {result.preview?.slice(0, 3).map((p, i) => (
+              <div key={i} style={{ background: 'var(--bg-input)', borderRadius: '8px', padding: '12px', marginBottom: '8px' }}>
+                <p style={{ fontWeight: 700 }}>{p.name} — <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>{p.role}</span></p>
+                <p style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{p.email}</p>
+                <p style={{ fontSize: '13px', marginTop: '6px', lineHeight: 1.5 }}>{p.body?.slice(0, 100)}...</p>
+              </div>
+            ))}
             <div className="modal-actions">
               <button className="btn btn-cancel" onClick={() => setShowModal(false)}>Cancel</button>
-              <button
-                className="btn btn-approve"
-                onClick={handleApproveAndSend}
-                disabled={sending}
-              >
-                {sending ? "Sending..." : "Approve & Send"}
+              <button className="btn btn-approve" onClick={handleApproveAndSend} disabled={sending}>
+                {sending ? '⏳ Sending...' : 'Approve & Send'}
               </button>
             </div>
           </div>

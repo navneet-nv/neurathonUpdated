@@ -1,0 +1,11 @@
+company,industry,contact_email,tier
+TechCorp Global,Cloud Infrastructure,sponsorship@techcorp.io,gold
+NeuralSoft Inc,AI & Machine Learning,partnerships@neuralsoft.ai,gold
+DataStream Labs,Big Data Analytics,events@datastream.io,gold
+Quantum Ventures,Venture Capital,contact@quantumvc.com,silver
+BuildFast Solutions,Developer Tools,hello@buildfast.dev,silver
+CyberSecure Ltd,Cybersecurity,events@cybersecure.io,silver
+OpenCloud Partners,Cloud Services,sponsor@opencloud.co,silver
+EduTech Innovations,EdTech,collab@edutech.in,bronze
+CodeArena,Competitive Programming,events@codearena.io,bronze
+FutureStack,Web3 & Blockchain,reach@futurestack.xyz,bronze

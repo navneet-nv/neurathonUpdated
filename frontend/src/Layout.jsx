@@ -1,25 +1,14 @@
-import React, { useState, useEffect } from 'react'
-import { NavLink, useLocation, useNavigate } from 'react-router-dom'
-import { toast } from 'react-hot-toast'
+import React from 'react'
+import { NavLink, useLocation } from 'react-router-dom'
+import { useEventConfig } from './EventContext'
 
 export default function Layout({ children }) {
   const location = useLocation()
-  const navigate = useNavigate()
-  const [isSetupComplete, setIsSetupComplete] = useState(false)
+  const { eventName } = useEventConfig()
 
-  // We re-check localStorage on mount and whenever location changes 
-  // to ensure Layout reflects the latest setup state.
-  useEffect(() => {
-    try {
-      const config = localStorage.getItem('swarm_event_config')
-      setIsSetupComplete(Boolean(config))
-    } catch {
-      setIsSetupComplete(false)
-    }
-  }, [location.pathname])
-  
   const getPageTitle = (path) => {
     switch (path) {
+      case '/events': return 'Events Manager'
       case '/': return 'Dashboard'
       case '/setup': return 'Event Setup'
       case '/content': return 'Content Strategist'
@@ -28,13 +17,6 @@ export default function Layout({ children }) {
       case '/swarm': return 'Swarm Orchestrator'
       case '/qa': return 'Participant Q&A'
       default: return 'Event Logistics Swarm'
-    }
-  }
-
-  const handleLockedClick = (e) => {
-    if (!isSetupComplete) {
-      e.preventDefault()
-      toast('Complete Event Setup first to unlock agents', { icon: '🔒' })
     }
   }
 
@@ -48,7 +30,7 @@ export default function Layout({ children }) {
             </div>
             <div className="brand-text">
               <h1>EL Swarm</h1>
-              <p>Neurathon '26</p>
+              <p>{eventName || 'No Active Event'}</p>
             </div>
           </div>
           <div className="system-status">
@@ -59,14 +41,14 @@ export default function Layout({ children }) {
 
         <nav className="nav-links">
           <NavLink 
-            to="/setup" 
+            to="/events" 
             className={({ isActive }) => isActive ? "nav-item active" : "nav-item"}
           >
-            <span className="material-symbols-outlined">rocket_launch</span>
+            <span className="material-symbols-outlined">event</span>
             <div style={{ display: 'flex', flexDirection: 'column' }}>
               <span style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-                Event Setup
-                {isSetupComplete && <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'var(--green)' }}></span>}
+                Events
+                <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'var(--green)' }}></span>
               </span>
               <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Start here</span>
             </div>
@@ -82,47 +64,50 @@ export default function Layout({ children }) {
           </NavLink>
           
           <NavLink 
-            to="/content" 
-            onClick={handleLockedClick}
-            className={({ isActive }) => `nav-item ${isActive ? 'active' : ''} ${!isSetupComplete ? 'lock-overlay-nav' : ''}`}
+            to="/setup" 
+            className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
           >
-            <span className="material-symbols-outlined">{isSetupComplete ? 'note_stack' : 'lock'}</span>
+            <span className="material-symbols-outlined">settings</span>
+            Event Settings
+          </NavLink>
+          
+          <NavLink 
+            to="/content" 
+            className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
+          >
+            <span className="material-symbols-outlined">note_stack</span>
             Content Agent
           </NavLink>
           
           <NavLink 
             to="/email" 
-            onClick={handleLockedClick}
-            className={({ isActive }) => `nav-item ${isActive ? 'active' : ''} ${!isSetupComplete ? 'lock-overlay-nav' : ''}`}
+            className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
           >
-            <span className="material-symbols-outlined">{isSetupComplete ? 'mail' : 'lock'}</span>
+            <span className="material-symbols-outlined">mail</span>
             Email Agent
           </NavLink>
 
           <NavLink 
             to="/scheduler" 
-            onClick={handleLockedClick}
-            className={({ isActive }) => `nav-item ${isActive ? 'active' : ''} ${!isSetupComplete ? 'lock-overlay-nav' : ''}`}
+            className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
           >
-            <span className="material-symbols-outlined">{isSetupComplete ? 'deployed_code' : 'lock'}</span>
+            <span className="material-symbols-outlined">deployed_code</span>
             Scheduler
           </NavLink>
 
           <NavLink 
             to="/swarm" 
-            onClick={handleLockedClick}
-            className={({ isActive }) => `nav-item ${isActive ? 'active' : ''} ${!isSetupComplete ? 'lock-overlay-nav' : ''}`}
+            className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
           >
-            <span className="material-symbols-outlined">{isSetupComplete ? 'hub' : 'lock'}</span>
+            <span className="material-symbols-outlined">hub</span>
             Swarm
           </NavLink>
 
           <NavLink 
             to="/qa" 
-            onClick={handleLockedClick}
-            className={({ isActive }) => `nav-item ${isActive ? 'active' : ''} ${!isSetupComplete ? 'lock-overlay-nav' : ''}`}
+            className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
           >
-            <span className="material-symbols-outlined">{isSetupComplete ? 'forum' : 'lock'}</span>
+            <span className="material-symbols-outlined">forum</span>
             Q&A Bot
           </NavLink>
         </nav>

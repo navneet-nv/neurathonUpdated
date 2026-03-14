@@ -1,45 +1,184 @@
 [
   {
-    "name": "Opening Ceremony",
-    "speaker": "Dr. Maya Patel",
-    "start_time": "2026-03-13 09:00",
-    "end_time": "2026-03-13 09:45",
-    "room": "Main Hall"
-  },
-  {
-    "name": "Keynote: Future of Event AI",
-    "speaker": "Dr. Maya Patel",
-    "start_time": "2026-03-13 09:30",
-    "end_time": "2026-03-13 10:15",
-    "room": "Auditorium A"
-  },
-  {
+    "id": "E001",
     "name": "Team Check-in & Badge Pickup",
     "speaker": "Ops Team",
-    "start_time": "2026-03-13 08:15",
-    "end_time": "2026-03-13 09:15",
-    "room": "Registration Desk"
+    "day": 1,
+    "start_time": "08:00",
+    "end_time": "09:00",
+    "room": "Registration Desk",
+    "status": "upcoming",
+    "track": "operations"
   },
   {
-    "name": "Mentor Office Hours",
+    "id": "E002",
+    "name": "Opening Keynote: The Future of AI in Events",
+    "speaker": "Dr. Maya Patel",
+    "day": 1,
+    "start_time": "09:00",
+    "end_time": "09:45",
+    "room": "Hall A",
+    "status": "upcoming",
+    "track": "keynote"
+  },
+  {
+    "id": "E003",
+    "name": "Sponsor Welcome Remarks",
+    "speaker": "TechCorp CEO",
+    "day": 1,
+    "start_time": "09:30",
+    "end_time": "10:00",
+    "room": "Hall A",
+    "status": "upcoming",
+    "track": "keynote",
+    "conflict_note": "TRUE CONFLICT — overlaps E002 in Hall A"
+  },
+  {
+    "id": "E004",
+    "name": "Workshop: LangGraph Multi-Agent Systems",
+    "speaker": "Prof. Arjun Kulkarni",
+    "day": 1,
+    "start_time": "10:00",
+    "end_time": "11:30",
+    "room": "Room 101",
+    "status": "upcoming",
+    "track": "workshop"
+  },
+  {
+    "id": "E005",
+    "name": "Panel: AI Ethics and Responsibility",
+    "speaker": "Dr. Maya Patel",
+    "day": 1,
+    "start_time": "10:00",
+    "end_time": "11:00",
+    "room": "Open Stage",
+    "status": "upcoming",
+    "track": "panel",
+    "conflict_note": "PARALLEL OK — different room from E004. NOTE: Dr. Maya Patel is also speaker of E002 which ends at 09:45 so this is fine."
+  },
+  {
+    "id": "E006",
+    "name": "Mentor Office Hours — Track A",
     "speaker": "Mentor Pool",
-    "start_time": "2026-03-13 10:30",
-    "end_time": "2026-03-13 12:00",
-    "room": "Mentor Lounge"
+    "day": 1,
+    "start_time": "11:30",
+    "end_time": "13:00",
+    "room": "Room 101",
+    "status": "upcoming",
+    "track": "mentoring"
   },
   {
+    "id": "E007",
     "name": "Lunch & Networking",
     "speaker": "Catering Team",
-    "start_time": "2026-03-13 12:00",
-    "end_time": "2026-03-13 13:00",
-    "room": "Dining Hall"
+    "day": 1,
+    "start_time": "13:00",
+    "end_time": "14:00",
+    "room": "Dining Hall",
+    "status": "upcoming",
+    "track": "break"
   },
   {
-    "name": "Judge Briefing",
+    "id": "E008",
+    "name": "Hackathon Kickoff Briefing",
+    "speaker": "Prof. Arjun Kulkarni",
+    "day": 1,
+    "start_time": "14:00",
+    "end_time": "15:00",
+    "room": "Hall A",
+    "status": "upcoming",
+    "track": "keynote",
+    "conflict_note": "SPEAKER DOUBLE-BOOKED — Prof. Arjun Kulkarni also speaking E009 (Room 101, 14:30)"
+  },
+  {
+    "id": "E009",
+    "name": "Workshop: Prompt Engineering Deep Dive",
+    "speaker": "Prof. Arjun Kulkarni",
+    "day": 1,
+    "start_time": "14:30",
+    "end_time": "16:00",
+    "room": "Room 101",
+    "status": "upcoming",
+    "track": "workshop",
+    "conflict_note": "SPEAKER DOUBLE-BOOKED — Prof. Arjun Kulkarni also in E008 (Hall A, 14:00-15:00)"
+  },
+  {
+    "id": "E010",
+    "name": "Opening Ceremony Day 2 + Results Reveal",
+    "speaker": "Dr. Maya Patel",
+    "day": 2,
+    "start_time": "09:00",
+    "end_time": "09:30",
+    "room": "Hall A",
+    "status": "upcoming",
+    "track": "keynote"
+  },
+  {
+    "id": "E011",
+    "name": "Workshop: Deploying FastAPI to Production",
+    "speaker": "Rahul Sinha",
+    "day": 2,
+    "start_time": "10:00",
+    "end_time": "11:30",
+    "room": "Room 101",
+    "status": "upcoming",
+    "track": "workshop"
+  },
+  {
+    "id": "E012",
+    "name": "Fireside Chat: Building Scalable Startups",
+    "speaker": "Priya Nair",
+    "day": 2,
+    "start_time": "10:00",
+    "end_time": "11:00",
+    "room": "Open Stage",
+    "status": "upcoming",
+    "track": "panel",
+    "conflict_note": "PARALLEL OK — different room from E011"
+  },
+  {
+    "id": "E013",
+    "name": "Judge Briefing & Rubric Review",
     "speaker": "Head Judge",
-    "start_time": "2026-03-13 09:30",
-    "end_time": "2026-03-13 10:00",
-    "room": "Main Hall"
+    "day": 3,
+    "start_time": "09:00",
+    "end_time": "10:00",
+    "room": "Room 101",
+    "status": "upcoming",
+    "track": "judging"
+  },
+  {
+    "id": "E014",
+    "name": "Final Presentations — Track A",
+    "speaker": "All Teams",
+    "day": 3,
+    "start_time": "10:00",
+    "end_time": "13:00",
+    "room": "Hall A",
+    "status": "upcoming",
+    "track": "judging"
+  },
+  {
+    "id": "E015",
+    "name": "Final Presentations — Track B",
+    "speaker": "All Teams",
+    "day": 3,
+    "start_time": "10:00",
+    "end_time": "13:00",
+    "room": "Room 101",
+    "status": "upcoming",
+    "track": "judging",
+    "conflict_note": "PARALLEL OK — different room from E014"
+  },
+  {
+    "id": "E016",
+    "name": "Closing Ceremony & Prize Distribution",
+    "speaker": "Dr. Maya Patel",
+    "day": 4,
+    "start_time": "17:00",
+    "end_time": "18:30",
+    "room": "Hall A",
+    "status": "upcoming",
+    "track": "keynote"
   }
 ]
-
