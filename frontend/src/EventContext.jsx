@@ -20,6 +20,12 @@ export function EventProvider({ children }) {
     submittedDelays: [],
     cancelledIds: [],
   })
+  const [budgetState, setBudgetState] = useState({
+    overview: null, expenses: [], alerts: [], analyses: [], activeTab: 'overview'
+  })
+  const [logisticsState, setLogisticsState] = useState({
+    items: [], issues: [], activeTab: 'equipment'
+  })
 
   const fetchActiveEvent = useCallback(async () => {
     setIsLoading(true)
@@ -75,6 +81,10 @@ export function EventProvider({ children }) {
     setParticipants,
     schedulerState,
     setSchedulerState,
+    budgetState,
+    setBudgetState,
+    logisticsState,
+    setLogisticsState,
   }
 
   return <EventContext.Provider value={value}>{children}</EventContext.Provider>

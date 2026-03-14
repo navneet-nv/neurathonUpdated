@@ -16,6 +16,8 @@ export default function Layout({ children }) {
       case '/scheduler': return 'Scheduler Agent'
       case '/swarm': return 'Swarm Orchestrator'
       case '/qa': return 'Participant Q&A'
+      case '/budget': return 'Budget Agent'
+      case '/logistics': return 'Logistics Agent'
       default: return 'Event Logistics Swarm'
     }
   }
@@ -109,6 +111,22 @@ export default function Layout({ children }) {
           >
             <span className="material-symbols-outlined">forum</span>
             Q&A Bot
+          </NavLink>
+
+          <NavLink 
+            to="/budget" 
+            className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
+          >
+            <span className="material-symbols-outlined">payments</span>
+            💰 Budget Agent
+          </NavLink>
+
+          <NavLink 
+            to="/logistics" 
+            className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
+          >
+            <span className="material-symbols-outlined">inventory_2</span>
+            📦 Logistics Agent
           </NavLink>
         </nav>
 

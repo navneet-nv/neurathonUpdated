@@ -11,6 +11,8 @@ import EmailPage from './pages/EmailPage'
 import SchedulerPage from './pages/SchedulerPage'
 import SwarmPage from './pages/SwarmPage'
 import QAPage from './pages/QAPage'
+import BudgetPage from './pages/BudgetPage'
+import LogisticsPage from './pages/LogisticsPage'
 
 function App() {
   return (
@@ -38,6 +40,8 @@ function App() {
             <Route path="/scheduler" element={<SchedulerPage />} />
             <Route path="/swarm" element={<SwarmPage />} />
             <Route path="/qa" element={<QAPage />} />
+            <Route path="/budget" element={<BudgetPage />} />
+            <Route path="/logistics" element={<LogisticsPage />} />
           </Routes>
         </Layout>
       </BrowserRouter>

@@ -120,6 +120,302 @@ async def save_participants(request: Request):
     return {"success": True, "count": len(participants)}
 
 
+# ════════════════════════════════════════════════════════════════
+# BUDGET AGENT ROUTES
+# ════════════════════════════════════════════════════════════════
+
+@app.get("/api/budget")
+async def get_budget():
+    ev = getattr(app.state, "active_event", None) or {}
+    budget = ev.get("budget", {})
+    expenses = budget.get("expenses", [])
+    spent_by_cat = {}
+    for e in expenses:
+        cat = e.get("category", "Misc")
+        spent_by_cat[cat] = spent_by_cat.get(cat, 0) + e.get("amount", 0)
+    return {
+        "total": budget.get("total", 0),
+        "allocations": budget.get("allocations", {}),
+        "expenses": expenses,
+        "summary": {"spent_by_category": spent_by_cat, "total_spent": sum(e.get("amount", 0) for e in expenses)},
+    }
+
+
+@app.post("/api/budget/setup")
+async def budget_setup(request: Request):
+    body = await request.json()
+    total = body.get("total", 0)
+    allocations = body.get("allocations", {})
+    db = get_db()
+    await db.events.update_one(
+        {"is_active": True},
+        {"$set": {"budget.total": total, "budget.allocations": allocations}}
+    )
+    updated = await db.events.find_one({"is_active": True})
+    if updated:
+        updated["_id"] = str(updated["_id"])
+        app.state.active_event = updated
+    return {"success": True, "total": total}
+
+
+@app.post("/api/budget/expense")
+async def add_budget_expense(request: Request):
+    from datetime import datetime, timezone
+    body = await request.json()
+    name = body.get("name", "")
+    amount = body.get("amount", 0)
+    category = body.get("category", "")
+    vendor = body.get("vendor", "")
+    date = body.get("date", "")
+    notes = body.get("notes", "")
+
+    # Auto-categorise if missing
+    auto_cat = ""
+    if not category or category.lower() == "auto-detect":
+        from agents.budget_agent import auto_categorise_expense
+        category = auto_categorise_expense(name, amount)
+        auto_cat = category
+
+    ev = getattr(app.state, "active_event", None) or {}
+    event_id = ev.get("event_id", "")
+    expense_doc = {
+        "expense_id": str(uuid.uuid4()),
+        "event_id": event_id,
+        "name": name,
+        "amount": amount,
+        "category": category,
+        "vendor": vendor,
+        "date": date,
+        "notes": notes,
+        "auto_category": auto_cat,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+    db = get_db()
+    await db.budget_entries.insert_one({**expense_doc, "_id": expense_doc["expense_id"]})
+    await db.events.update_one(
+        {"is_active": True},
+        {"$push": {"budget.expenses": expense_doc}}
+    )
+    updated = await db.events.find_one({"is_active": True})
+    if updated:
+        updated["_id"] = str(updated["_id"])
+        app.state.active_event = updated
+    return {"success": True, "expense": expense_doc}
+
+
+@app.put("/api/budget/expense/{expense_id}")
+async def update_budget_expense(expense_id: str, request: Request):
+    body = await request.json()
+    db = get_db()
+    await db.budget_entries.update_one({"_id": expense_id}, {"$set": body})
+    # Also update inside the event doc
+    ev = getattr(app.state, "active_event", None) or {}
+    expenses = ev.get("budget", {}).get("expenses", [])
+    for i, e in enumerate(expenses):
+        if e.get("expense_id") == expense_id:
+            expenses[i] = {**e, **body}
+            break
+    await db.events.update_one(
+        {"is_active": True},
+        {"$set": {"budget.expenses": expenses}}
+    )
+    updated = await db.events.find_one({"is_active": True})
+    if updated:
+        updated["_id"] = str(updated["_id"])
+        app.state.active_event = updated
+    return {"success": True}
+
+
+@app.delete("/api/budget/expense/{expense_id}")
+async def delete_budget_expense(expense_id: str):
+    db = get_db()
+    await db.budget_entries.delete_one({"_id": expense_id})
+    await db.events.update_one(
+        {"is_active": True},
+        {"$pull": {"budget.expenses": {"expense_id": expense_id}}}
+    )
+    updated = await db.events.find_one({"is_active": True})
+    if updated:
+        updated["_id"] = str(updated["_id"])
+        app.state.active_event = updated
+    return {"success": True}
+
+
+@app.post("/api/budget/analyse")
+async def budget_analyse():
+    from agents.budget_agent import run_budget_agent
+    ev = getattr(app.state, "active_event", None) or {}
+    budget = ev.get("budget", {})
+    result = run_budget_agent(
+        event_name=ev.get("event_name", ""),
+        expenses=budget.get("expenses", []),
+        total_budget=budget.get("total", 0),
+        allocations=budget.get("allocations", {}),
+    )
+    from datetime import datetime, timezone
+    result["timestamp"] = datetime.now(timezone.utc).isoformat()
+    db = get_db()
+    await db.events.update_one(
+        {"is_active": True},
+        {"$push": {"outputs.budget_analyses": result}}
+    )
+    updated = await db.events.find_one({"is_active": True})
+    if updated:
+        updated["_id"] = str(updated["_id"])
+        app.state.active_event = updated
+    return result
+
+
+@app.get("/api/budget/export")
+async def budget_export():
+    ev = getattr(app.state, "active_event", None) or {}
+    expenses = ev.get("budget", {}).get("expenses", [])
+    lines = ["name,amount,category,vendor,date,notes"]
+    for e in expenses:
+        lines.append(",".join([
+            str(e.get("name", "")),
+            str(e.get("amount", "")),
+            str(e.get("category", "")),
+            str(e.get("vendor", "")),
+            str(e.get("date", "")),
+            str(e.get("notes", "")).replace(",", ";"),
+        ]))
+    return {"csv": "\n".join(lines), "count": len(expenses)}
+
+
+# ════════════════════════════════════════════════════════════════
+# LOGISTICS AGENT ROUTES
+# ════════════════════════════════════════════════════════════════
+
+@app.get("/api/logistics")
+async def get_logistics():
+    ev = getattr(app.state, "active_event", None) or {}
+    event_id = ev.get("event_id", "")
+    db = get_db()
+    items = await db.logistics_items.find({"event_id": event_id}).to_list(500)
+    issues = await db.logistics_issues.find({"event_id": event_id}).to_list(200)
+    for d in items + issues:
+        d["_id"] = str(d["_id"])
+    rooms = list({e.get("room", "") for e in ev.get("schedule", []) if e.get("room")})
+    return {"items": items, "issues": issues, "rooms": sorted(rooms)}
+
+
+@app.post("/api/logistics/seed")
+async def logistics_seed():
+    ev = getattr(app.state, "active_event", None) or {}
+    event_id = ev.get("event_id", "")
+    db = get_db()
+    existing = await db.logistics_items.count_documents({"event_id": event_id})
+    if existing > 0:
+        return {"seeded": False, "message": "Items already exist", "count": existing}
+
+    from datetime import datetime, timezone
+    schedule = ev.get("schedule", [])
+    rooms = list({e.get("room", "") for e in schedule if e.get("room")})
+    default_equipment = ["Projector", "Microphone", "Whiteboard", "Seating", "WiFi Router", "Lighting", "Extension Cords"]
+    docs = []
+    for room in rooms:
+        for eq in default_equipment:
+            docs.append({
+                "event_id": event_id,
+                "type": "equipment",
+                "name": eq,
+                "room": room,
+                "status": "Pending",
+                "assigned_to": "",
+                "eta": "",
+                "notes": "",
+                "created_at": datetime.now(timezone.utc).isoformat(),
+            })
+    if docs:
+        await db.logistics_items.insert_many(docs)
+    return {"seeded": True, "count": len(docs)}
+
+
+@app.put("/api/logistics/item/{item_id}")
+async def update_logistics_item(item_id: str, request: Request):
+    from bson import ObjectId
+    body = await request.json()
+    db = get_db()
+    await db.logistics_items.update_one({"_id": ObjectId(item_id)}, {"$set": body})
+    return {"success": True}
+
+
+@app.post("/api/logistics/issue")
+async def create_logistics_issue(request: Request):
+    from datetime import datetime, timezone
+    from agents.logistics_agent import suggest_issue_resolution
+    body = await request.json()
+    ev = getattr(app.state, "active_event", None) or {}
+    event_id = ev.get("event_id", "")
+
+    suggestions = suggest_issue_resolution(
+        issue_description=body.get("description", ""),
+        room=body.get("room", ""),
+        severity=body.get("severity", "Medium"),
+    )
+
+    doc = {
+        "event_id": event_id,
+        "description": body.get("description", ""),
+        "severity": body.get("severity", "Medium"),
+        "room": body.get("room", ""),
+        "assigned_to": body.get("assigned_to", ""),
+        "status": "Open",
+        "suggestions": suggestions,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "resolved_at": None,
+    }
+    db = get_db()
+    result = await db.logistics_issues.insert_one(doc)
+    doc["_id"] = str(result.inserted_id)
+    return {"success": True, "issue": doc}
+
+
+@app.put("/api/logistics/issue/{issue_id}")
+async def update_logistics_issue(issue_id: str, request: Request):
+    from bson import ObjectId
+    from datetime import datetime, timezone
+    body = await request.json()
+    if body.get("status", "").lower() == "resolved":
+        body["resolved_at"] = datetime.now(timezone.utc).isoformat()
+    db = get_db()
+    await db.logistics_issues.update_one({"_id": ObjectId(issue_id)}, {"$set": body})
+    return {"success": True}
+
+
+@app.post("/api/logistics/analyse")
+async def logistics_analyse():
+    from agents.logistics_agent import run_logistics_agent
+    from datetime import datetime, timezone
+    ev = getattr(app.state, "active_event", None) or {}
+    event_id = ev.get("event_id", "")
+    db = get_db()
+    items = await db.logistics_items.find({"event_id": event_id}).to_list(500)
+    issues = await db.logistics_issues.find({"event_id": event_id}).to_list(200)
+    rooms = list({e.get("room", "") for e in ev.get("schedule", []) if e.get("room")})
+    for d in items + issues:
+        d["_id"] = str(d["_id"])
+
+    result = run_logistics_agent(
+        event_name=ev.get("event_name", ""),
+        items=items,
+        issues=issues,
+        rooms=rooms,
+    )
+    result["timestamp"] = datetime.now(timezone.utc).isoformat()
+    await db.events.update_one(
+        {"is_active": True},
+        {"$push": {"outputs.logistics_analyses": result}}
+    )
+    updated = await db.events.find_one({"is_active": True})
+    if updated:
+        updated["_id"] = str(updated["_id"])
+        app.state.active_event = updated
+    return result
+
+
 UPLOAD_DIR = Path(__file__).parent / "uploads"
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -1638,8 +1934,22 @@ async def _swarm_chat_inner(payload: ChatRequest):
             "content_agent": "Drafts engaging social media posts, announcements, and summaries.",
             "scheduler_agent": "Modifies the event schedule: delays events, handles cancellations, and resolves resource/room conflicts.",
             "email_agent": "Drafts highly personalised emails based on the participant_schedule_map. ALWAYS needs raw lists of affected participant emails to function.",
-            "image_agent": "Generates images based on descriptions."
-        }
+            "image_agent": "Generates images based on descriptions.",
+            "budget_agent": "Fires when user asks about budget, expenses, spending, costs, overruns, or reallocation.",
+            "logistics_agent": "Fires when user asks about equipment, vendors, room readiness, delivery status, issues, or what's pending."
+        },
+        "budget_summary": {
+            "total": ev.get("budget", {}).get("total", 0),
+            "allocations": ev.get("budget", {}).get("allocations", {}),
+            "total_spent": sum(e.get("amount", 0) for e in ev.get("budget", {}).get("expenses", [])),
+            "expenses_count": len(ev.get("budget", {}).get("expenses", [])),
+        },
+        "logistics_summary": {
+            "total_items": 0,
+            "pending_items": 0,
+            "open_issues": 0,
+            "recent_issues": [],
+        },
     }
 
     # ── Step 1: GPT-4o decision ──────────────────────────────────────────────
@@ -1687,6 +1997,12 @@ Your response must exactly match this structure:
     "filter_event_id": "",
     "subject": "",
     "body_instruction": "what the email should say"
+  }},
+  "budget_payload": {{
+    "instruction": "what to analyse or report on"
+  }},
+  "logistics_payload": {{
+    "instruction": "what to check or report on"
   }},
   "needs_approval": true,
   "approval_message": "Confirm: about to email X people...",
